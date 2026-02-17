@@ -14,7 +14,7 @@ Predict the probability that a given driver finishes on the podium (Top 3) for a
 
 ## 📦 Data Source
 
-Data is sourced from the Ergast Developer API.
+Data is sourced from the Ergast API schema via the Jolpica (Ergast-compatible) endpoint.
 
 Raw race, results, driver, constructor, and circuit data are pulled and normalized into a structured modeling dataset.
 
@@ -27,15 +27,24 @@ Raw race, results, driver, constructor, and circuit data are pulled and normaliz
 
 ## 🏗 Project Structure
 
-data/
-raw/
-clean/
-modeling/
-src/
-ingest/
-clean/
-features/
-models/
-notebooks/
-reports/
-tests/
+    data/
+      raw/
+      clean/
+      modeling/
+
+    src/
+      ingest/
+      clean/
+      models/
+
+    notebooks/
+    reports/
+    tests/
+
+
+## ✅ Progress
+
+- Raw data ingestion with pagination handling (Jolpica API)
+- Clean normalized tables (drivers, constructors, circuits, races, results)
+- Modeling table (driver-race level)
+- Validated leakage-safe rolling features (driver + constructor form) in exploratory analysis
