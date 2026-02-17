@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from duckdb import df
 import pandas as pd
 
 
@@ -47,7 +48,6 @@ def build_dim_drivers() -> pd.DataFrame:
     drivers = _extract_table(payload, "Drivers")
     df = pd.json_normalize(drivers)
 
-    # Standardize column names
     rename = {
         "driverId": "driver_id",
         "code": "driver_code",
@@ -60,11 +60,9 @@ def build_dim_drivers() -> pd.DataFrame:
     keep = ["driver_id", "driver_code", "given_name", "family_name", "dob", "nationality", "url"]
     df = df[keep].copy()
 
-    # Types
     df["driver_id"] = df["driver_id"].astype(str)
     df["dob"] = pd.to_datetime(df["dob"], errors="coerce")
 
-    # Uniqueness
     if df["driver_id"].duplicated().any():
         raise ValueError("Duplicate driver_id found in drivers")
 
@@ -121,7 +119,10 @@ def build_fct_races() -> pd.DataFrame:
     all_races: List[Dict[str, Any]] = []
     for year in range(2010, 2026):
         payload = read_json(RAW_DIR / f"races_{year}.json")
-        races = _extract_table(payload, "Races")
+        races = payload.get("Races")
+        if races is None:
+            races = _extract_table(payload, "Races")
+
         all_races.extend(races)
 
     df = pd.json_normalize(all_races)
@@ -161,7 +162,27 @@ def build_fct_results() -> pd.DataFrame:
 
     for year in range(2010, 2026):
         payload = read_json(RAW_DIR / f"results_{year}.json")
-        races = _extract_table(payload, "Races")
+
+        # NEW raw format: {"Races": [...], "year": 2010}
+        races = payload.get("Races")
+        if races is None:
+            # fallback (older format): MRData -> RaceTable -> Races
+            races = _extract_table(payload, "Races")
+
+        # If still empty, fail early with a clear error
+        if not races:
+            raise ValueError(f"No races found in results_{year}.json. Keys={list(payload.keys())}")
+
+        # Deduplicate races by (season, round)
+        dedup = {}
+        for race in races:
+            key = (race.get("season"), race.get("round"))
+            if key not in dedup:
+                dedup[key] = race
+            else:
+                if len(race.get("Results", [])) > len(dedup[key].get("Results", [])):
+                    dedup[key] = race
+        races = list(dedup.values())
 
         for race in races:
             season = race.get("season")
@@ -174,11 +195,12 @@ def build_fct_results() -> pd.DataFrame:
                     "race_id": race_id,
                     "year": int(season),
                     "round": int(rnd),
-                    "driver_id": r.get("Driver", {}).get("driverId"),
-                    "constructor_id": r.get("Constructor", {}).get("constructorId"),
+                    "driver_id": (r.get("Driver") or {}).get("driverId"),
+                    "constructor_id": (r.get("Constructor") or {}).get("constructorId"),
                     "grid": r.get("grid"),
-                    "position": r.get("position"),
-                    "position_order": r.get("positionOrder"),
+                    # Jolpica/Ergast-compatible results include "position" and "positionText"
+                    "finish_position": r.get("position"),
+                    "position_text": r.get("positionText"),
                     "points": r.get("points"),
                     "status": r.get("status"),
                     "laps": r.get("laps"),
@@ -193,7 +215,7 @@ def build_fct_results() -> pd.DataFrame:
     df["driver_id"] = df["driver_id"].astype(str)
     df["constructor_id"] = df["constructor_id"].astype(str)
 
-    for c in ["grid", "position", "position_order", "laps"]:
+    for c in ["grid", "finish_position", "laps"]:
         df[c] = pd.to_numeric(df[c], errors="coerce").astype("Int64")
     df["points"] = pd.to_numeric(df["points"], errors="coerce")
 
@@ -210,8 +232,8 @@ def build_fct_results() -> pd.DataFrame:
             "driver_id",
             "constructor_id",
             "grid",
-            "position",
-            "position_order",
+            "finish_position",
+            "position_text",
             "points",
             "status",
             "laps",

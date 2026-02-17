@@ -42,13 +42,15 @@ def main() -> None:
 
         if not races_path.exists():
             # races for a year: /{year}.json
-            payload = client.fetch_raw(f"{year}.json", params={"limit": 1000, "offset": 0})
-            write_json(races_path, payload)
+            races = client.fetch_all(f"{year}.json")
+            write_json(races_path, {"Races": races, "year": year})
+
 
         if not results_path.exists():
             # results for a year: /{year}/results.json
-            payload = client.fetch_raw(f"{year}/results.json", params={"limit": 1000, "offset": 0})
-            write_json(results_path, payload)
+            races_with_results = client.fetch_all(f"{year}/results.json")
+            write_json(results_path, {"Races": races_with_results, "year": year})
+
 
 
 if __name__ == "__main__":

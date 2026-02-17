@@ -61,28 +61,26 @@ class ErgastClient:
             payload = self._get_json(url, params=params)
 
             mrdata = payload.get("MRData", {})
-            total_str = mrdata.get("total", "0")
-            try:
-                total = int(total_str)
-            except ValueError:
-                total = 0
+            total = int(mrdata.get("total", "0") or 0)
 
-            # Ergast structure varies by endpoint; races often live at MRData -> RaceTable -> Races
-            # results: MRData -> RaceTable -> Races (each race contains Results)
+            # IMPORTANT: the API may cap the limit (e.g., to 100) even if we request 1000
+            returned_limit = int(mrdata.get("limit", str(limit)) or limit)
+            returned_offset = int(mrdata.get("offset", str(offset)) or offset)
+
             race_table = mrdata.get("RaceTable", {})
             races = race_table.get("Races", [])
 
-            # Some endpoints (drivers/constructors/circuits) have different tables.
-            # We'll handle those in the ingest script by reading the raw payload.
             if races:
                 all_items.extend(races)
-                offset += limit
+
+                # Move to next page using what the server actually returned
+                offset = returned_offset + returned_limit
+
                 if offset >= total:
                     break
             else:
-                # No races array; stop pagination and return empty list.
                 break
-
+            
         return all_items
 
     def fetch_raw(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
