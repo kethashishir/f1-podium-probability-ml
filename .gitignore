@@ -208,3 +208,5 @@ __marimo__/
 
 # Project data
 data/raw/
+data/clean/
+data/modeling/
