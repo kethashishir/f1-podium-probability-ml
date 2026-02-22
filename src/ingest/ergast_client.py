@@ -18,8 +18,12 @@ class ErgastConfig:
 
 class ErgastClient:
     """
-    Minimal Ergast API client with pagination + retries.
-    We store raw JSON responses to data/raw unchanged.
+    Client for interacting with the Ergast-compatible F1 API.
+
+    Responsibilities:
+    - Handle HTTP requests
+    - Retry on transient failures
+    - Handle pagination (limit/offset)
     """
 
     def __init__(self, config: ErgastConfig = ErgastConfig(), session: Optional[requests.Session] = None):
@@ -27,6 +31,10 @@ class ErgastClient:
         self.session = session or requests.Session()
 
     def _get_json(self, url: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Perform a GET request and return parsed JSON.
+        Retries up to max_retries on failure.
+        """
         last_err: Optional[Exception] = None
         for attempt in range(1, self.config.max_retries + 1):
             try:
@@ -80,7 +88,7 @@ class ErgastClient:
                     break
             else:
                 break
-            
+
         return all_items
 
     def fetch_raw(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
